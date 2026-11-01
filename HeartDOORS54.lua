@@ -343,7 +343,7 @@ end)
 
 addTog(ESPBox, "ESP_Player", "Players", "plr", function()
 	for _, plr in ipairs(Players:GetPlayers()) do
-		if plr \~= LocalPlayer and plr.Character and plr:GetAttribute("Alive") == true then
+		if plr ~= LocalPlayer and plr.Character and plr:GetAttribute("Alive") == true then
 			AddESP({Object = plr.Character, Text = plr.Name, Color = T.plrColor or Color3.fromRGB(255, 255, 255)})
 		end
 	end
@@ -389,7 +389,7 @@ addTog(ESPBox, "ESP_Item", "Items", "item", function()
 	for _, obj in ipairs(Objects.Items) do
 		local label = ItemNames[obj.Name] or (obj.Name == "Green_Herb" and "Green Herb")
 		if label then
-			AddESP({Object = obj, Text = label, Color = T.itemColor or Color3.fromRGB(170, 0, 255)}, obj:GetAttribute("ParentRoom") \~= nil)
+			AddESP({Object = obj, Text = label, Color = T.itemColor or Color3.fromRGB(170, 0, 255)}, obj:GetAttribute("ParentRoom") ~= nil)
 		end
 	end
 end, function()
@@ -506,7 +506,7 @@ local function HandleObject(obj)
 	elseif ItemNames[name] and obj:FindFirstChild("ModulePrompt") then
 		table.insert(Objects.Items, obj)
 		if T.item then
-			AddESP({Object = obj, Text = ItemNames[name], Color = T.itemColor or Color3.fromRGB(170, 0, 255)}, obj:GetAttribute("ParentRoom") \~= nil)
+			AddESP({Object = obj, Text = ItemNames[name], Color = T.itemColor or Color3.fromRGB(170, 0, 255)}, obj:GetAttribute("ParentRoom") ~= nil)
 		end
 	elseif name == "Green_Herb" then
 		table.insert(Objects.Items, obj)
@@ -555,7 +555,7 @@ C.entitySpawn = Workspace.ChildAdded:Connect(function(ent)
 			local title = data.NotifyMessage.Title
 			local body = data.NotifyMessage.Body
 			local img = EntityIcons[ent.Name]
-			if ent.Name == "RushMoving" and ent.PrimaryPart.Name \~= "RushNew" then
+			if ent.Name == "RushMoving" and ent.PrimaryPart.Name ~= "RushNew" then
 				title = title:gsub("Rush", ent.PrimaryPart.Name)
 				alias = ent.PrimaryPart.Name
 			end
@@ -589,7 +589,7 @@ C.descAdded = Workspace.DescendantAdded:Connect(function(obj)
 end)
 
 for _, plr in ipairs(Players:GetPlayers()) do
-	if plr \~= LocalPlayer then
+	if plr ~= LocalPlayer then
 		if plr.Character and T.plr and plr:GetAttribute("Alive") == true then
 			AddESP({Object = plr.Character, Text = plr.Name, Color = T.plrColor or Color3.fromRGB(255, 255, 255)})
 		end
