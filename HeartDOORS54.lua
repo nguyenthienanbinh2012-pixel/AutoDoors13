@@ -644,5 +644,228 @@ EntityESPOptions:OnChanged(function()
 		end
 	end
 end)
+--[[
+ESP FIX - chèn vào cuối file HeartDOORS54.lua, NGAY TRƯỚC dòng "end" cuối cùng
+(không thêm mô tả, chỉ Lua thuần)
+]]
+
+-- 1) Gán ParentRoom + đảm bảo object có highlight part cho Door
+local _HandleObject = HandleObject
+HandleObject = function(obj)
+	if not obj or not obj.Parent then return end
+
+	if not obj:GetAttribute("ParentRoom") then
+		local cr = Workspace:FindFirstChild("CurrentRooms")
+		if cr then
+			for _, room in ipairs(cr:GetChildren()) do
+				if obj:IsDescendantOf(room) then
+					obj:SetAttribute("ParentRoom", tonumber(room.Name))
+					break
+				end
+			end
+		end
+	end
+
+	if obj.Name == "Door" and obj.Parent and tonumber(obj.Parent.Name) then
+		if not obj:FindFirstChild("HighlightPart") then
+			local src = obj:FindFirstChild("Door")
+			if src and src:IsA("BasePart") then
+				local hp = Instance.new("Part")
+				hp.Name = "HighlightPart"
+				hp.Transparency = 0.999
+				hp.Size = src.Size
+				hp.CFrame = src.CFrame
+				hp.CanCollide = false
+				hp.Material = Enum.Material.Plastic
+				hp:SetAttribute("ParentRoom", tonumber(obj.Parent.Name))
+				local w = Instance.new("WeldConstraint")
+				w.Part0 = hp
+				w.Part1 = src
+				w.Parent = hp
+				hp.Parent = obj
+				table.insert(Objects.Doors, hp)
+				if T.door then
+					AddESP({Object = hp, Text = "Door " .. GetDoorNumber(obj), Color = T.doorColor or Color3.fromRGB(0, 200, 255)}, true)
+				end
+			end
+		end
+	end
+
+	return _HandleObject(obj)
+end
+
+-- 2) Fix AddESP roomBased: check ngay lần đầu, connect sau
+local _AddESP = AddESP
+AddESP = function(opts, roomBased)
+	local obj = opts.Object
+	if not obj or not obj.Parent then return end
+	if ESPObjs[obj] then return end
+
+	_AddESP(opts, roomBased)
+
+	if roomBased then
+		local cur = tonumber(LocalPlayer:GetAttribute("CurrentRoom"))
+		local oroom = tonumber(obj:GetAttribute("ParentRoom"))
+		if oroom == nil then
+			local cr = Workspace:FindFirstChild("CurrentRooms")
+			if cr then
+				for _, room in ipairs(cr:GetChildren()) do
+					if obj:IsDescendantOf(room) then
+						oroom = tonumber(room.Name)
+						obj:SetAttribute("ParentRoom", oroom)
+						break
+					end
+				end
+			end
+		end
+		local data = ESPObjs[obj]
+		if data then
+			local vis = (oroom == cur) or (Objects.Doors and table.find(Objects.Doors, obj) and oroom == cur + 1)
+			if data.HL then data.HL.Enabled = vis end
+			if data.BB then data.BB.Enabled = vis end
+		end
+		if ESPConnections[obj] then
+			ESPConnections[obj]:Disconnect()
+			ESPConnections[obj] = nil
+		end
+		ESPConnections[obj] = LocalPlayer:GetAttributeChangedSignal("CurrentRoom"):Connect(function()
+			local c2 = tonumber(LocalPlayer:GetAttribute("CurrentRoom"))
+			local o2 = tonumber(obj:GetAttribute("ParentRoom"))
+			local v2 = (o2 == c2) or (Objects.Doors and table.find(Objects.Doors, obj) and o2 == c2 + 1)
+			local d = ESPObjs[obj]
+			if d then
+				if d.HL then d.HL.Enabled = v2 end
+				if d.BB then d.BB.Enabled = v2 end
+			end
+		end)
+	end
+end
+
+-- 3) Rusher: Humanoid + PrimaryPart transparency
+C.rusherFix = Workspace.ChildAdded:Connect(function(ent)
+	local aliases = {RushMoving=true, AmbushMoving=true, BackdoorRush=true, A60=true, A120=true, GlitchRush=true, GlitchAmbush=true, CustomEntity=true, FrozenAmbush=true, SallyMoving=true}
+	if not aliases[ent.Name] then return end
+	task.spawn(function()
+		local t = 0
+		while not ent.PrimaryPart and t < 100 do
+			for _, c in ipairs(ent:GetChildren()) do
+				if c:IsA("BasePart") then ent.PrimaryPart = c end
+			end
+			task.wait(0.05) t = t + 1
+		end
+		if not ent.PrimaryPart then return end
+		if not ent:FindFirstChildOfClass("Humanoid") then
+			local h = Instance.new("Humanoid")
+			h.Name = "HighlightHumanoid"
+			h.Parent = ent
+		end
+		ent.PrimaryPart.Transparency = 0.999
+		ent.PrimaryPart.Material = Enum.Material.Plastic
+	end)
+end)
+
+-- 4) Chờ CurrentRooms có room rồi mới scan
+task.spawn(function()
+	local cr = Workspace:WaitForChild("CurrentRooms", 60)
+	if not cr then return end
+	local t = 0
+	while not cr:FindFirstChildOfClass("Model") and t < 120 do
+		task.wait(0.5) t = t + 1
+	end
+	for _, obj in ipairs(Workspace:GetDescendants()) do
+		task.spawn(HandleObject, obj)
+	end
+end)
+
+-- 5) Rebuild ESP khi toggle bật lại (vì object có thể vào Objects sau khi toggle bật)
+for _, key in ipairs({"ent","door","hide","plr","chest","item","curr","ladder","obj"}) do
+	local old = T[key]
+	-- dùng hook đơn giản: mỗi Heartbeat check nếu toggle bật mà object chưa có ESP thì thêm
+end
+
+C.espRebuild = RunService.Heartbeat:Connect(function()
+	if not (T.ent or T.door or T.hide or T.chest or T.item or T.curr or T.ladder or T.obj or T.plr) then return end
+
+	if T.door then
+		for _, o in ipairs(Objects.Doors) do
+			if o.Parent and not ESPObjs[o] then
+				AddESP({Object = o, Text = "Door " .. GetDoorNumber(o.Parent and o.Parent.Parent or o), Color = T.doorColor or Color3.fromRGB(0, 200, 255)}, true)
+			end
+		end
+	end
+	if T.hide then
+		for _, o in ipairs(Objects.HidingSpots) do
+			if o.Parent and not ESPObjs[o] then
+				local lb = HidingSpotLabels[o.Name]
+				if lb then AddESP({Object = o, Text = lb, Color = T.hideColor or Color3.fromRGB(255, 170, 0)}, true) end
+			end
+		end
+	end
+	if T.chest then
+		for _, o in ipairs(Objects.Chests) do
+			if o.Parent and not ESPObjs[o] then
+				local lb
+				if o.Name == "ChestBox" or o.Name == "ChestBoxLocked" then lb = o:GetAttribute("Locked") and "Locked Chest" or "Chest"
+				elseif o.Name == "Toolbox" or o.Name == "Toolbox_Locked" then lb = o:GetAttribute("Locked") and "Locked Toolbox" or "Toolbox"
+				elseif o.Name == "Chest_Vine" then lb = "Vine Chest"
+				elseif o.Name == "Toolshed_Small" then lb = "Toolshed"
+				elseif o.Name == "Locker_Small_Locked" then lb = "Locked Item Locker"
+				elseif o.Name == "MouseHole" then lb = "Mouse"
+				end
+				if lb then AddESP({Object = o, Text = lb, Color = T.chestColor or Color3.fromRGB(255, 255, 0)}, true) end
+			end
+		end
+	end
+	if T.item then
+		for _, o in ipairs(Objects.Items) do
+			if o.Parent and not ESPObjs[o] then
+				local lb = ItemNames[o.Name] or (o.Name == "Green_Herb" and "Green Herb")
+				if lb then AddESP({Object = o, Text = lb, Color = T.itemColor or Color3.fromRGB(170, 0, 255)}, o:GetAttribute("ParentRoom") ~= nil) end
+			end
+		end
+	end
+	if T.curr then
+		for _, o in ipairs(Objects.Currency) do
+			if o.Parent and not ESPObjs[o] then
+				local lb
+				if o.Name == "GoldPile" and o:GetAttribute("GoldValue") then lb = "Gold Pile [" .. o:GetAttribute("GoldValue") .. "]"
+				elseif o.Name == "StardustPickup" then lb = "Stardust Pile"
+				end
+				if lb then AddESP({Object = o, Text = lb, Color = T.currColor or Color3.fromRGB(255, 255, 0)}, true) end
+			end
+		end
+	end
+	if T.ladder then
+		for _, o in ipairs(Objects.Ladders) do
+			if o.Parent and not ESPObjs[o] then
+				AddESP({Object = o, Text = "Ladder", Color = T.ladderColor or Color3.fromRGB(255, 255, 255)}, true)
+			end
+		end
+	end
+	if T.obj then
+		for _, o in ipairs(Objects.Objectives) do
+			if o.Parent and not ESPObjs[o] then
+				local lb = ObjectiveLabels[o.Name]
+				if o.Name == "TimerLever" then lb = "Time Lever [+" .. (o:GetAttribute("AddTime") or 30) .. "s]"
+				elseif o.Name == "MinesAnchor" then
+					local sign = o:FindFirstChild("Sign")
+					lb = "Anchor [" .. (sign and sign.TextLabel and sign.TextLabel.Text or "?") .. "]"
+				end
+				if lb then AddESP({Object = o, Text = lb, Color = T.objColor or Color3.fromRGB(0, 255, 0)}, true) end
+			end
+		end
+	end
+	if T.ent then
+		for _, o in ipairs(Objects.Entities) do
+			if o.Parent and not ESPObjs[o] then
+				local lb = EntityESPLabels[o.Name]
+				if not lb and Entities[o.Name] then lb = Entities[o.Name].Alias end
+				if lb and EntityESPOptions.Value[lb] then
+					AddESP({Object = o, Text = lb, Color = T.entColor or Color3.fromRGB(255, 0, 0)}, not NodeEntities[lb])
+				end
+			end
+		end
+	end
+end)
 
 end
