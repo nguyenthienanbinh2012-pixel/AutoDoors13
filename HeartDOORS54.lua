@@ -6,6 +6,289 @@ local LocalPlayer = Svc.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local ReplicatedStorage = Svc.ReplicatedStorage
 
+local ESP_Config = {
+    DoorColor        = Color3.fromRGB(255, 150, 200),
+    CabinetColor     = Color3.fromRGB(19, 211, 13),
+    ChestColor       = Color3.fromRGB(131, 96, 168),
+    ItemColor        = Color3.fromRGB(0, 170, 255),
+    EntityColor      = Color3.fromRGB(255, 0, 0),
+    GoldColor        = Color3.fromRGB(255, 215, 0),
+    LeverColor       = Color3.fromRGB(200, 200, 200),
+    BookColor        = Color3.fromRGB(0, 100, 255),
+    BreakerColor     = Color3.fromRGB(0, 200, 255),
+    LadderColor      = Color3.fromRGB(0, 191, 255),
+    FuseColor        = Color3.fromRGB(255, 170, 0),
+    HidingColor      = Color3.fromRGB(255, 255, 255),
+    PlayerColor      = Color3.fromRGB(180, 180, 180),
+    ObjectiveColor   = Color3.fromRGB(0, 255, 0),
+    FillTransparency = 0.5,
+    OutlineTransparency = 0,
+    TextSize         = 16,
+    Font             = Enum.Font.Oswald,
+    StudsOffset      = 3,
+}
+
+local ESP_Items = {
+    KeyObtain = "Key", LiveHintBook = "Book", Lighter = "Lighter", Lockpick = "Lockpicks",
+    Vitamins = "Vitamins", Crucifix = "Crucifix", CrucifixWall = "Crucifix",
+    SkeletonKey = "Skeleton Key", Flashlight = "Flashlight", Candle = "Candle",
+    LiveBreakerPolePickup = "Fuse", Shears = "Shears", Battery = "Battery",
+    PickupItem = "Paper", ElectricalKeyObtain = "Electrical Key", Shakelight = "Shakelight",
+    Scanner = "iPad", StarVial = "Star Vial", StarBottle = "Star Bottle", StarJug = "Star Jug",
+    Bandage = "Bandage", BandagePack = "Bandage Pack", BatteryPack = "Battery Pack",
+    HolyGrenade = "Holy Grenade", ShieldMini = "Mini Shield", ShieldBig = "Big Shield",
+    Glowsticks = "Glowstick", AlarmClock = "Alarm Clock", Compass = "Compass",
+    Lantern = "Lantern", KeyIron = "Iron Key", GoldGun = "Golden Gun", Candy = "Candy",
+    WaterPump = "Water Pump", VineGuillotine = "Vine Lever", LotusPetalPickup = "Lotus Petal",
+    MouseHole = "Louie Mouse", TimerLever = "Timer Lever", LeverForGate = "Gate Lever",
+}
+local ESP_Entities = {
+    RushMoving = "Rush", AmbushMoving = "Ambush", FigureRagdoll = "Figure", FigureRig = "Figure",
+    FigureLibrary = "Figure", Figure = "Figure", SeekMoving = "Seek", Screech = "Screech",
+    Eyes = "Eyes", Lookman = "Eyes", Snare = "Snare", A60 = "A-60", A120 = "A-120",
+    GlitchRush = "Glitch Rush", GlitchAmbush = "Glitch Ambush", BackdoorRush = "Blitz",
+    BackdoorLookman = "Lookman", JeffTheKiller = "Jeff", Groundskeeper = "Groundskeeper",
+    MonumentEntity = "Monument", GrumbleRig = "Grumble", GiggleCeiling = "Giggle",
+    LiveEntityBramble = "Bramble", Hole = "Mandrake Hole", MandrakeLive = "Mandrake",
+    DoorFake = "Dupe", FakeDoor = "Dupe", SideroomSpace = "Vacuum",
+    GloombatSwarm = "Gloombat Swarm", SallyMoving = "Sally",
+}
+local ESP_Cabinets = {
+    Wardrobe = "Closet", ["Backdoor_Wardrobe"] = "Closet", Toolshed = "Closet",
+    RetroWardrobe = "Closet", ["Wardrobe-FOOLS26"] = "Closet", Locker_Large = "Locker",
+    Rooms_Locker = "Locker", Rooms_Locker_Fridge = "Locker", Bed = "Bed",
+    Double_Bed = "Double Bed", CircularVent = "Vent", Dumpster = "Dumpster",
+}
+local ESP_Chests = {
+    ChestBox = "Chest", ChestBoxLocked = "Locked Chest", Toolbox = "Toolbox",
+    Toolbox_Locked = "Locked Toolbox", Chest_Vine = "Vine Chest", Toolshed_Small = "Toolshed",
+    Locker_Small_Locked = "Locked Item Locker",
+}
+local ESP_Other = {
+    Door = "Door", GoldPile = "Gold", Ladder = "Ladder", FuseObtain = "Fuse",
+    MinesGenerator = "Generator", MinesGateButton = "Gate Button", MinesAnchor = "Anchor",
+}
+
+local ESP_State = {
+    Door=false, Cabinet=false, Chest=false, Item=false, Entity=false, Gold=false,
+    Lever=false, Book=false, Breaker=false, Ladder=false, Fuse=false, Hiding=false,
+    Player=false, Objective=false,
+}
+
+local ESP_Objects = setmetatable({}, { __mode = "k" })
+local ESP_ColorCache = {}
+
+local function ESP_GetCurrentRoom()
+    return tonumber(LocalPlayer:GetAttribute("CurrentRoom")) or 0
+end
+local function ESP_GetLatestRoom()
+    local gd = ReplicatedStorage:FindFirstChild("GameData")
+    if gd and gd:FindFirstChild("LatestRoom") then return gd.LatestRoom.Value end
+    return ESP_GetCurrentRoom()
+end
+
+local function ESP_Add(obj, text, category, color)
+    if not obj or not obj.Parent then return end
+    if obj:IsA("ProximityPrompt") then return end
+    local existing = ESP_Objects[obj]
+    if existing then
+        existing.text = text or existing.text
+        if color then existing.color = color end
+        if existing.label then
+            existing.label.Text = existing.text
+            existing.label:SetAttribute("BaseText", existing.text)
+            existing.label.TextColor3 = existing.color
+        end
+        if existing.highlight then
+            existing.highlight.FillColor = existing.color
+            existing.highlight.OutlineColor = existing.color
+        end
+        return
+    end
+    color = color or ESP_Config.EntityColor
+    text = text or "ESP"
+    local target = obj
+    if obj:IsA("Model") and not obj.PrimaryPart then
+        local base = obj:FindFirstChildWhichIsA("BasePart")
+        if base then target = base else return end
+    end
+    local hl = Instance.new("Highlight")
+    hl.Name = "SkyESP_Highlight"
+    hl.FillColor = color
+    hl.OutlineColor = color
+    hl.FillTransparency = ESP_Config.FillTransparency
+    hl.OutlineTransparency = ESP_Config.OutlineTransparency
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Adornee = target
+    hl.Parent = target
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "SkyESP_Billboard"
+    bb.Size = UDim2.new(0, 200, 0, 30)
+    bb.AlwaysOnTop = true
+    bb.StudsOffset = Vector3.new(0, ESP_Config.StudsOffset, 0)
+    bb.Adornee = target
+    bb.Parent = target
+    local lbl = Instance.new("TextLabel")
+    lbl.Name = "SkyESP_Label"
+    lbl.Size = UDim2.new(1, 0, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.TextScaled = true
+    lbl.Text = text
+    lbl:SetAttribute("BaseText", text)
+    lbl.TextColor3 = color
+    lbl.TextStrokeTransparency = 0
+    lbl.TextStrokeColor3 = Color3.new(color.R/2, color.G/2, color.B/2)
+    lbl.TextSize = ESP_Config.TextSize
+    lbl.Font = ESP_Config.Font
+    lbl.Parent = bb
+    ESP_Objects[obj] = { highlight=hl, billboard=bb, label=lbl, text=text, color=color, category=category, target=target }
+    obj.Destroying:Once(function() ESP_Objects[obj] = nil end)
+end
+
+local function ESP_Remove(obj)
+    if not obj then return end
+    local data = ESP_Objects[obj]
+    if data then
+        if data.highlight then data.highlight:Destroy() end
+        if data.billboard then data.billboard:Destroy() end
+        ESP_Objects[obj] = nil
+    end
+end
+
+local function ESP_RemoveCategory(cat)
+    for obj, data in pairs(ESP_Objects) do
+        if data.category == cat then ESP_Remove(obj) end
+    end
+end
+
+local function ESP_UpdateColor(cat, color)
+    ESP_ColorCache[cat] = color
+    for obj, data in pairs(ESP_Objects) do
+        if data.category == cat then
+            data.color = color
+            if data.highlight then data.highlight.FillColor = color; data.highlight.OutlineColor = color end
+            if data.label then data.label.TextColor3 = color; data.label.TextStrokeColor3 = Color3.new(color.R/2, color.G/2, color.B/2) end
+        end
+    end
+end
+
+local function ESP_ScanRoom(room)
+    if not room then return end
+    local roomNum = tonumber(room.Name) or 0
+    local current = ESP_GetCurrentRoom()
+    if roomNum < current or roomNum > current + 1 then return end
+    for _, v in ipairs(room:GetDescendants()) do
+        local n = v.Name
+        if ESP_State.Item and ESP_Items[n] and v:IsA("Model") then ESP_Add(v, ESP_Items[n], "Item", ESP_Config.ItemColor) end
+        if ESP_State.Entity and ESP_Entities[n] then ESP_Add(v, ESP_Entities[n], "Entity", ESP_Config.EntityColor) end
+        if ESP_State.Cabinet and ESP_Cabinets[n] then ESP_Add(v, ESP_Cabinets[n], "Cabinet", ESP_Config.CabinetColor) end
+        if ESP_State.Chest and ESP_Chests[n] then ESP_Add(v, ESP_Chests[n], "Chest", ESP_Config.ChestColor) end
+        if ESP_State.Gold and n == "GoldPile" and v:GetAttribute("GoldValue") then ESP_Add(v, tostring(v:GetAttribute("GoldValue")).." Gold", "Gold", ESP_Config.GoldColor) end
+        if ESP_State.Lever and n == "LeverForGate" then ESP_Add(v, "Gate Lever", "Lever", ESP_Config.LeverColor) end
+        if ESP_State.Book and n == "LiveHintBook" then ESP_Add(v, "Library Book", "Book", ESP_Config.BookColor) end
+        if ESP_State.Breaker and n == "LiveBreakerPolePickup" then ESP_Add(v, "Breaker", "Breaker", ESP_Config.BreakerColor) end
+        if ESP_State.Ladder and n == "Ladder" then ESP_Add(v, "Ladder", "Ladder", ESP_Config.LadderColor) end
+        if ESP_State.Fuse and (n=="FuseObtain" or n=="MinesGenerator" or n=="MinesGateButton") then ESP_Add(v, ESP_Other[n] or "Fuse", "Fuse", ESP_Config.FuseColor) end
+        if ESP_State.Hiding and ESP_Cabinets[n] then ESP_Add(v, ESP_Cabinets[n], "Hiding", ESP_Config.HidingColor) end
+        if ESP_State.Objective and (n=="KeyObtain" or n=="ElectricalKeyObtain" or n=="MinesAnchor" or n=="WaterPump") then ESP_Add(v, ESP_Items[n] or ESP_Other[n] or "Objective", "Objective", ESP_Config.ObjectiveColor) end
+        if ESP_State.Door and n == "Door" and v:IsA("Model") and v.Parent and tonumber(v.Parent.Name) then ESP_Add(v, "Door "..(tonumber(v.Parent.Name)+1), "Door", ESP_Config.DoorColor) end
+    end
+end
+
+local function ESP_ScanWorkspace()
+    if ESP_State.Entity then
+        for _, v in ipairs(Workspace:GetChildren()) do
+            if ESP_Entities[v.Name] then ESP_Add(v, ESP_Entities[v.Name], "Entity", ESP_Config.EntityColor) end
+        end
+    end
+    if ESP_State.Player then
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character then
+                local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+                if hum and hum.Health > 0 then
+                    ESP_Add(plr.Character, plr.Name.." ["..math.floor(hum.Health/hum.MaxHealth*100).."%]", "Player", ESP_Config.PlayerColor)
+                end
+            end
+        end
+    end
+end
+
+local function ESP_UpdateDistances()
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    for obj, data in pairs(ESP_Objects) do
+        if data.label and data.target then
+            local dist = math.floor((root.Position - data.target.Position).Magnitude)
+            local base = data.label:GetAttribute("BaseText") or data.text
+            data.label.Text = base.." ["..dist.."m]"
+        end
+    end
+end
+
+local ESP_RenderConn = RunService.RenderStepped:Connect(function()
+    if not (ESP_State.Door or ESP_State.Cabinet or ESP_State.Chest or ESP_State.Item or ESP_State.Entity or ESP_State.Gold or ESP_State.Lever or ESP_State.Book or ESP_State.Breaker or ESP_State.Ladder or ESP_State.Fuse or ESP_State.Hiding or ESP_State.Player or ESP_State.Objective) then return end
+    ESP_UpdateDistances()
+end)
+
+local ESP_RoomWatcher = LocalPlayer:GetAttributeChangedSignal("CurrentRoom"):Connect(function()
+    for obj, data in pairs(ESP_Objects) do
+        if data.category ~= "Entity" and data.category ~= "Player" then ESP_Remove(obj) end
+    end
+    local rooms = Workspace:FindFirstChild("CurrentRooms")
+    if rooms then
+        local current = ESP_GetCurrentRoom()
+        for _, room in ipairs(rooms:GetChildren()) do
+            local n = tonumber(room.Name)
+            if n and n >= current and n <= current+1 then ESP_ScanRoom(room) end
+        end
+    end
+    ESP_ScanWorkspace()
+end)
+
+local ESP_DescConn = Workspace.DescendantAdded:Connect(function(v)
+    if v:IsA("ProximityPrompt") then return end
+    task.defer(function()
+        local rooms = Workspace:FindFirstChild("CurrentRooms")
+        if rooms and v:IsDescendantOf(rooms) then
+            local room = v:FindFirstAncestorOfClass("Model")
+            while room and room.Parent ~= rooms do room = room.Parent end
+            if room then ESP_ScanRoom(room) end
+        elseif ESP_Entities[v.Name] and ESP_State.Entity then
+            ESP_Add(v, ESP_Entities[v.Name], "Entity", ESP_Config.EntityColor)
+        end
+    end)
+end)
+
+local SkyESP = {}
+function SkyESP:Toggle(cat, value)
+    ESP_State[cat] = value
+    if not value then ESP_RemoveCategory(cat) return end
+    local rooms = Workspace:FindFirstChild("CurrentRooms")
+    if rooms then
+        local current = ESP_GetCurrentRoom()
+        for _, room in ipairs(rooms:GetChildren()) do
+            local n = tonumber(room.Name)
+            if n and n >= current and n <= current+1 then ESP_ScanRoom(room) end
+        end
+    end
+    ESP_ScanWorkspace()
+end
+function SkyESP:SetColor(cat, c) ESP_UpdateColor(cat, c) end
+function SkyESP:SetFillTransparency(v) ESP_Config.FillTransparency=v; for _,d in pairs(ESP_Objects) do if d.highlight then d.highlight.FillTransparency=v end end end
+function SkyESP:SetOutlineTransparency(v) ESP_Config.OutlineTransparency=v; for _,d in pairs(ESP_Objects) do if d.highlight then d.highlight.OutlineTransparency=v end end end
+function SkyESP:SetTextSize(v) ESP_Config.TextSize=v; for _,d in pairs(ESP_Objects) do if d.label then d.label.TextSize=v end end end
+function SkyESP:SetFont(v) ESP_Config.Font=v; for _,d in pairs(ESP_Objects) do if d.label then d.label.Font=v end end end
+function SkyESP:Unload()
+    if ESP_RenderConn then ESP_RenderConn:Disconnect() end
+    if ESP_RoomWatcher then ESP_RoomWatcher:Disconnect() end
+    if ESP_DescConn then ESP_DescConn:Disconnect() end
+    for obj in pairs(ESP_Objects) do ESP_Remove(obj) end
+    ESP_Objects = setmetatable({}, { __mode = "k" })
+end
+getgenv().SkyESP = SkyESP
+
+
 local T, C, TOGS, ESPObjs, ESPConnections = {}, {}, {}, {}, {}
 local Objects = {
 	Doors = {},
