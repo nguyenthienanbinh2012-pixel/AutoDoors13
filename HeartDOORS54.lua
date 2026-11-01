@@ -802,5 +802,45 @@ task.spawn(function()
 		end
 	end
 end)
+-- Fix: nếu oroom nil hoặc cur nil → KHÔNG tắt HL/BB, để mặc định enabled = true
+local _AddESP3 = AddESP
+AddESP = function(opts, roomBased)
+	local obj = opts.Object
+	if not obj or not obj.Parent then return end
+	if ESPObjs[obj] then return end
+	_TagRoom(obj)
+	_AddESP3(opts, roomBased)
+	if roomBased then
+		local cur = tonumber(LocalPlayer:GetAttribute("CurrentRoom"))
+		local oroom = tonumber(obj:GetAttribute("ParentRoom"))
+		local d = ESPObjs[obj]
+		if d and cur ~= nil and oroom ~= nil then
+			local vis = (oroom == cur or oroom == cur + 1)
+			if d.HL then d.HL.Enabled = vis end
+			if d.BB then d.BB.Enabled = vis end
+		end
+		if ESPConnections[obj] then ESPConnections[obj]:Disconnect() end
+		ESPConnections[obj] = LocalPlayer:GetAttributeChangedSignal("CurrentRoom"):Connect(function()
+			local c2 = tonumber(LocalPlayer:GetAttribute("CurrentRoom"))
+			local o2 = tonumber(obj:GetAttribute("ParentRoom"))
+			if c2 == nil or o2 == nil then return end
+			local v2 = (o2 == c2 or o2 == c2 + 1)
+			local d2 = ESPObjs[obj]
+			if d2 then
+				if d2.HL then d2.HL.Enabled = v2 end
+				if d2.BB then d2.BB.Enabled = v2 end
+			end
+		end)
+	end
+end
+
+-- Heartbeat tag lại liên tục
+C.fixTagHB = RunService.Heartbeat:Connect(function()
+	local cr = Workspace:FindFirstChild("CurrentRooms")
+	if not cr then return end
+	for _, arr in ipairs({Objects.Doors,Objects.HidingSpots,Objects.Entities,Objects.Chests,Objects.Items,Objects.Currency,Objects.Ladders,Objects.Objectives}) do
+		for _, o in ipairs(arr) do _TagRoom(o) end
+	end
+end)
 
 end
