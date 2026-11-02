@@ -487,9 +487,13 @@ return function(VisualLeft, _, Obsidian, Svc)
             ColorsByCat[cat] = c
             UpdateColor(cat, c)
         end)
-        tog:OnChanged(function(v)
+tog:OnChanged(function(v)
             API:Toggle(cat, v)
-            if v then onEnable and onEnable() else onDisable and onDisable() end
+            if v then
+                if onEnable then onEnable() end
+            else
+                if onDisable then onDisable() end
+            end
         end)
         return tog, col
     end
