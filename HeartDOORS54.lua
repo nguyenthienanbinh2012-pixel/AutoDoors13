@@ -9,33 +9,37 @@ return function(VisualLeft, _, Obsidian, Svc)
     ------------------------------------------------------------
     -- CONFIG
     ------------------------------------------------------------
-    local Config = {
-        FillTransparency    = 0.75,
-        OutlineTransparency = 0,
-        TextSize            = 16,
-        Font                = Enum.Font.GothamBold,
-        StudsOffset         = 3,
-        MaxDistance         = 1000,
+ local Config = {
+        FillTransparency    = 0.82,
+        OutlineTransparency = 0.15,
+        TextSize            = 12,
+        MinTextSize         = 10,
+        MaxTextSize         = 16,
+        Font                = Enum.Font.FredokaOne, -- Cartoon Hologram
+        StudsOffset         = 2.2,
+        MaxDistance         = 350,
         ShowDistance        = true,
+        BillboardW          = 120,
+        BillboardH          = 20,
+        DistUpdateHz        = 8,
     }
 
     local Colors = {
-        Door      = Color3.fromRGB(255, 150, 200),
-        Cabinet   = Color3.fromRGB(19, 211, 13),
-        Chest     = Color3.fromRGB(131, 96, 168),
-        Item      = Color3.fromRGB(0, 170, 255),
-        Entity    = Color3.fromRGB(255, 0, 0),
-        Gold      = Color3.fromRGB(255, 215, 0),
-        Lever     = Color3.fromRGB(200, 200, 200),
-        Book      = Color3.fromRGB(0, 100, 255),
-        Breaker   = Color3.fromRGB(0, 200, 255),
-        Ladder    = Color3.fromRGB(0, 191, 255),
-        Fuse      = Color3.fromRGB(255, 170, 0),
-        Hiding    = Color3.fromRGB(255, 255, 255),
-        Player    = Color3.fromRGB(180, 180, 180),
-        Objective = Color3.fromRGB(0, 255, 0),
+        Door      = Color3.fromRGB(0x35, 0xDD, 0xF5),
+        Cabinet   = Color3.fromRGB(0x8B, 0xDC, 0xF5),
+        Chest     = Color3.fromRGB(0xB6, 0x8C, 0xFF),
+        Item      = Color3.fromRGB(0xA7, 0x8B, 0xFA),
+        Entity    = Color3.fromRGB(0xFF, 0x52, 0x63),
+        Gold      = Color3.fromRGB(0xFF, 0xD1, 0x66),
+        Lever     = Color3.fromRGB(0xE0, 0xE0, 0xE0),
+        Book      = Color3.fromRGB(0x55, 0xE6, 0xA5),
+        Breaker   = Color3.fromRGB(0x35, 0xDD, 0xF5),
+        Ladder    = Color3.fromRGB(0x8B, 0xDC, 0xF5),
+        Fuse      = Color3.fromRGB(0xFF, 0xD1, 0x66),
+        Hiding    = Color3.fromRGB(0x8B, 0xDC, 0xF5),
+        Player    = Color3.fromRGB(0xEA, 0xF2, 0xFF),
+        Objective = Color3.fromRGB(0x55, 0xE6, 0xA5),
     }
-
     ------------------------------------------------------------
     -- LOOKUP TABLES
     ------------------------------------------------------------
