@@ -225,7 +225,7 @@ return function(VisualLeft, _, Obsidian, Svc)
             color     = color,
             category  = category,
             target    = target,
-            roomBased = (category \~= "Entity" and category \~= "Player"),
+            roomBased = (category ~= "Entity" and category \~= "Player"),
         }
 
         if ActiveESP[obj].roomBased then
@@ -306,7 +306,7 @@ return function(VisualLeft, _, Obsidian, Svc)
                         local t = math.clamp(dist / maxD, 0, 1)
                         local size = math.floor(minS + (maxS - minS) * t + 0.5)
                         d.label.TextScaled = false
-                        if d.label.TextSize \~= size then
+                        if d.label.TextSize ~= size then
                             d.label.TextSize = size
                         end
 
@@ -415,31 +415,44 @@ return function(VisualLeft, _, Obsidian, Svc)
     ------------------------------------------------------------
     local Conns = {}
 
-    Conns.render = RunService.RenderStepped:Connect(function()
+    local _distAcc = 0
+    local _distInterval = 1 / (Config.DistUpdateHz or 8)
+
+    Conns.heartbeat = RunService.Heartbeat:Connect(function(dt)
         if not (State.Door or State.Cabinet or State.Chest or State.Item or State.Entity
             or State.Gold or State.Lever or State.Book or State.Breaker or State.Ladder
             or State.Fuse or State.Hiding or State.Player or State.Objective) then
             return
         end
-        UpdateDistances()
+        _distAcc = _distAcc + dt
+        if _distAcc < _distInterval then return end
+        _distAcc = 0
+        pcall(UpdateDistances)
     end)
-
     Conns.room = LocalPlayer:GetAttributeChangedSignal("CurrentRoom"):Connect(function()
-        -- xóa ESP không phải entity/player
+        local cur = GetCurrentRoom()
         for obj, d in pairs(ActiveESP) do
             if d.category ~= "Entity" and d.category ~= "Player" then
-                RemoveESP(obj)
+                local oroom = GetObjectRoom(obj)
+                if oroom ~= nil and (oroom < cur or oroom > cur + 1) then
+                    RemoveESP(obj)
+                elseif d.roomBased then
+                    local vis = IsVisibleForRoom(obj, true)
+                    if d.highlight and d.highlight.Parent then d.highlight.Enabled = vis end
+                    if d.billboard and d.billboard.Parent then d.billboard.Enabled = vis end
+                end
             end
         end
         local rooms = Workspace:FindFirstChild("CurrentRooms")
         if rooms then
-            local cur = GetCurrentRoom()
             for _, room in ipairs(rooms:GetChildren()) do
                 local n = tonumber(room.Name)
-                if n and n >= cur and n <= cur + 1 then ScanRoom(room) end
+                if n and n >= cur and n <= cur + 1 then
+                    pcall(ScanRoom, room)
+                end
             end
         end
-        ScanWorkspace()
+        pcall(ScanWorkspace)
     end)
 
     Conns.desc = Workspace.DescendantAdded:Connect(function(v)
