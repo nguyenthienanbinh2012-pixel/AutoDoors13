@@ -168,8 +168,16 @@ return function(VisualLeft, _, Obsidian, Svc)
         color = color or ColorsByCat[category] or Colors.Entity
         text  = text or "ESP"
         local target = obj
-        if obj:IsA("Model") and not obj.PrimaryPart then
-            local base = obj:FindFirstChildWhichIsA("BasePart")
+        if obj:IsA("Model") then
+            if obj.PrimaryPart then
+                target = obj.PrimaryPart
+            else
+                local base = obj:FindFirstChildWhichIsA("BasePart")
+                if not base then return end
+                target = base
+            end
+        elseif not obj:IsA("BasePart") then
+            local base = obj:FindFirstChildWhichIsA("BasePart", true)
             if not base then return end
             target = base
         end
@@ -186,9 +194,10 @@ return function(VisualLeft, _, Obsidian, Svc)
 
         local bb = Instance.new("BillboardGui")
         bb.Name = "P3_ESP_BB"
-        bb.Size = UDim2.new(0, 200, 0, 30)
+        bb.Size = UDim2.new(0, Config.BillboardW or 120, 0, Config.BillboardH or 20)
         bb.AlwaysOnTop = true
         bb.StudsOffset = Vector3.new(0, Config.StudsOffset, 0)
+        bb.MaxDistance = Config.MaxDistance or 350
         bb.Adornee = target
         bb.Parent = target
 
@@ -196,16 +205,18 @@ return function(VisualLeft, _, Obsidian, Svc)
         lbl.Name = "P3_ESP_LBL"
         lbl.Size = UDim2.new(1, 0, 1, 0)
         lbl.BackgroundTransparency = 1
-        lbl.TextScaled = true
+        lbl.TextScaled = false
+        lbl.TextSize = Config.TextSize or 12
         lbl.Text = text
         lbl:SetAttribute("BaseText", text)
         lbl.TextColor3 = color
-        lbl.TextStrokeTransparency = 0
-        lbl.TextStrokeColor3 = Color3.new(color.R/2, color.G/2, color.B/2)
-        lbl.TextSize = Config.TextSize
+        lbl.TextStrokeTransparency = 0.35
+        lbl.TextStrokeColor3 = Color3.new(0, 0, 0)
         lbl.Font = Config.Font
+        lbl.TextXAlignment = Enum.TextXAlignment.Center
+        lbl.TextYAlignment = Enum.TextYAlignment.Center
         lbl.Parent = bb
-
+        
         ActiveESP[obj] = {
             highlight = hl,
             billboard = bb,
@@ -214,10 +225,17 @@ return function(VisualLeft, _, Obsidian, Svc)
             color     = color,
             category  = category,
             target    = target,
+            roomBased = (category \~= "Entity" and category \~= "Player"),
         }
 
-        obj.Destroying:Once(function()
-            ActiveESP[obj] = nil
+        if ActiveESP[obj].roomBased then
+            BindRoomVisibility(obj, true)
+        end
+
+        pcall(function()
+            obj.Destroying:Once(function()
+                RemoveESP(obj)
+            end)
         end)
     end
 
@@ -242,35 +260,67 @@ return function(VisualLeft, _, Obsidian, Svc)
     end
 
     local function UpdateColor(cat, color)
-        ColorsByCat[cat] = color
-        for obj, d in pairs(ActiveESP) do
-            if d.category == cat then
-                d.color = color
-                if d.highlight then
-                    d.highlight.FillColor = color
-                    d.highlight.OutlineColor = color
-                end
-                if d.label then
-                    d.label.TextColor3 = color
-                    d.label.TextStrokeColor3 = Color3.new(color.R/2, color.G/2, color.B/2)
-                end
-            end
+    
+    end
+    local function GetWorldPosition(inst)
+        if not inst then return nil end
+        if inst:IsA("BasePart") then return inst.Position end
+        if inst:IsA("Model") then
+            if inst.PrimaryPart then return inst.PrimaryPart.Position end
+            local ok, cf = pcall(function() return inst:GetPivot() end)
+            if ok and cf then return cf.Position end
+            local p = inst:FindFirstChildWhichIsA("BasePart", true)
+            return p and p.Position or nil
         end
+        local p = inst:FindFirstChildWhichIsA("BasePart", true)
+        return p and p.Position or nil
     end
 
     local function UpdateDistances()
         local char = LocalPlayer.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if not root then return end
+        local rootPos = root.Position
+        local minS = Config.MinTextSize or 10
+        local maxS = Config.MaxTextSize or 16
+        local maxD = Config.MaxDistance or 350
+
         for obj, d in pairs(ActiveESP) do
-            if d.label and d.target and d.target.Parent then
-                local dist = math.floor((root.Position - d.target.Position).Magnitude)
-                local base = d.label:GetAttribute("BaseText") or d.text
-                d.label.Text = Config.ShowDistance and (base .. " [" .. dist .. "m]") or base
+            if d.label and d.label.Parent then
+                local pos = GetWorldPosition(d.target) or GetWorldPosition(obj)
+                if not pos then
+                    if d.billboard then d.billboard.Enabled = false end
+                else
+                    local dist = (rootPos - pos).Magnitude
+                    if dist > maxD then
+                        if d.billboard then d.billboard.Enabled = false end
+                        if d.highlight then d.highlight.Enabled = false end
+                    else
+                        local roomOk = true
+                        if d.roomBased then
+                            roomOk = IsVisibleForRoom(obj, true)
+                        end
+                        if d.billboard then d.billboard.Enabled = roomOk end
+                        if d.highlight then d.highlight.Enabled = roomOk end
+
+                        local t = math.clamp(dist / maxD, 0, 1)
+                        local size = math.floor(minS + (maxS - minS) * t + 0.5)
+                        d.label.TextScaled = false
+                        if d.label.TextSize \~= size then
+                            d.label.TextSize = size
+                        end
+
+                        local base = d.label:GetAttribute("BaseText") or d.text
+                        if Config.ShowDistance then
+                            d.label.Text = base .. " [" .. math.floor(dist) .. "m]"
+                        else
+                            d.label.Text = base
+                        end
+                    end
+                end
             end
         end
     end
-
     ------------------------------------------------------------
     -- SCANNERS
     ------------------------------------------------------------
